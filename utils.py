@@ -17,7 +17,7 @@ class  DATAPROCESS:
 
         self.seperate_rate =seperate_rate       #测试集 训练集 划分比率
         self.batch_size = batch_size
-        self.sentence_length = 100              #截断或填充的句子长度,全部统一
+        self.sentence_length = 200              #截断或填充的句子长度,全部统一
 
         #data structure to build
         self.src_data_raw=[]    #全部数据集
@@ -72,7 +72,8 @@ class  DATAPROCESS:
         for index in range(total_lines):
             data_line = train_data_rawlines[index].split(" ")[:-1]
             label_line = train_label_rawlines[index].split(" ")[:-1]
-
+            label_line =["<START>"]+label_line+["<END>"]    #在目标语中的每个句子的一头一尾添加开始翻译和结束翻译的标记
+                                                            #
             #add and seperate valid ,train set.
             data=[int(self.src_word2id.get(each,0)) for each in data_line]
             label=[int(self.dst_word2id.get(each,0)) for each in label_line]
@@ -88,7 +89,7 @@ class  DATAPROCESS:
                 self.dst_train_raw.append(label)
 
         self.train_batches= [i for i in range(int(len(self.src_train_raw)/self.batch_size) -1)]
-        self.train_batch_index =0
+        self.train_batch_index = 0
 
     def pad_sequence(self,sequence,object_length,pad_value=None):
         '''
@@ -170,7 +171,7 @@ if __name__ == '__main__':
                           source_vocb_path="data/cn.txt.vab",
                           dest_word_embeddings_path="data/en.txt.ebd.npy",
                           dest_vocb_path="data/en.txt.vab",
-                          batch_size=3,
+                          batch_size=5,
                           seperate_rate=0.1
                         )
     src,dst,length=dataGen.next_train_batch()
