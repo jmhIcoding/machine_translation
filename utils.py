@@ -17,8 +17,8 @@ class  DATAPROCESS:
 
         self.seperate_rate =seperate_rate       #测试集 训练集 划分比率
         self.batch_size = batch_size
-        self.src_sentence_length = 100             #截断或填充的句子长度,全部统一
-        self.dst_sentence_length = 150
+        self.src_sentence_length = 20           #截断或填充的句子长度,全部统一
+        self.dst_sentence_length = 30
         #data structure to build
         self.src_data_raw=[]    #全部数据集
         self.dst_data_raw =[]
@@ -148,8 +148,16 @@ class  DATAPROCESS:
             src_sequence_length.append(min(self.src_sentence_length,len(datas[index])))
             dst_sequence_length.append(min(self.dst_sentence_length,len(labels[index])))
         return output_x,output_label,src_sequence_length,dst_sequence_length
-
-
+    def src_id2words(self,ids):
+        rst=[]
+        for id in ids:
+            rst+=self.src_id2word[str(id)]
+        return  "_".join(rst)
+    def tgt_id2words(self,ids):
+        rst=[]
+        for id in ids:
+            rst+=self.dst_id2word[str(id)]
+        return  "_".join(rst)
 def evaluate(predict_labels,real_labels,efficient_length):
 #输入的单位是batch;
 # predict_labels:[batch_size,sequence_length],real_labels:[batch_size,sequence_length]

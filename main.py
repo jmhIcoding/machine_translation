@@ -3,9 +3,9 @@ from attention import  AttentionModel
 from attention import  logger
 from utils import  DATAPROCESS
 from utils import  evaluate
-hidden_nums=600
-learning_rate = 0.0001
-MODE = AttentionModel.PREDICT
+hidden_nums=500
+learning_rate = 0.001
+MODE = AttentionModel.TRAIN
 max_epoch = 30
 dataGen = DATAPROCESS(
                         source_ling_path="data/cn.txt",
@@ -14,7 +14,7 @@ dataGen = DATAPROCESS(
                           source_vocb_path="data/cn.txt.vab",
                           dest_word_embeddings_path="data/en.txt.ebd.npy",
                           dest_vocb_path="data/en.txt.vab",
-                          batch_size=200,
+                          batch_size=100,
                           seperate_rate=0.1
                         )
 
@@ -39,9 +39,14 @@ while dataGen.epoch < max_epoch:
         elif MODE==AttentionModel.PREDICT:
             print("inference begin ")
             output_x,output_label,src_sequence_length,dst_sequence_length=dataGen.test_data()
-            predict_id=Model.one_step(one_batch_data=[output_x,output_label,src_sequence_length,dst_sequence_length])
-            print(predict_id[:10])
+            predict_id=Model.one_step(one_batch_data=[output_x,[],src_sequence_length,[]])
             print("inference")
+            for i in range(3):
+                src=dataGen.src_id2words(output_x[i])
+                dst=dataGen.tgt_id2words(predict_id[0][i])
+                print({"src":src})
+                print({'dst':dst})
+                print("Next Line")
             break
         if dataGen.train_batch_index is 0:
             Model.save()
