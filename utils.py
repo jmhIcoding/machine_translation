@@ -17,8 +17,8 @@ class  DATAPROCESS:
 
         self.seperate_rate =seperate_rate       #测试集 训练集 划分比率
         self.batch_size = batch_size
-        self.sentence_length = 200              #截断或填充的句子长度,全部统一
-
+        self.src_sentence_length = 100             #截断或填充的句子长度,全部统一
+        self.dst_sentence_length = 150
         #data structure to build
         self.src_data_raw=[]    #全部数据集
         self.dst_data_raw =[]
@@ -43,6 +43,8 @@ class  DATAPROCESS:
         self.__load_data()
 
         self.last_batch=0
+        self.epoch =0
+        self.dst_vocb_size = len(self.dst_word2id)
     def __load_wordebedding(self):
         self.src_word_embeddings=np.load(self.src_word_embedding_path)
         self.embedding_length = np.shape(self.src_word_embeddings)[-1]
@@ -73,7 +75,8 @@ class  DATAPROCESS:
             data_line = train_data_rawlines[index].split(" ")[:-1]
             label_line = train_label_rawlines[index].split(" ")[:-1]
             label_line =["<START>"]+label_line+["<END>"]    #在目标语中的每个句子的一头一尾添加开始翻译和结束翻译的标记
-                                                            #
+                                                            #这个是必不可少的！
+                                                            #源语料句子并没有这个要求，可加可不加
             #add and seperate valid ,train set.
             data=[int(self.src_word2id.get(each,0)) for each in data_line]
             label=[int(self.dst_word2id.get(each,0)) for each in label_line]
@@ -109,35 +112,42 @@ class  DATAPROCESS:
         #padding
         output_x=[]
         output_label=[]
-        efficient_sequence_length=[]
+        src_sequence_length=[]
+        dst_sequence_length=[]
         index =self.train_batches[self.train_batch_index]
         self.train_batch_index =(self.train_batch_index +1 ) % len(self.train_batches)
+        if self.train_batch_index is 0:
+            self.epoch +=1
         datas = self.src_train_raw[index*self.batch_size:(index+1)*self.batch_size]
         labels = self.dst_train_raw[index*self.batch_size:(index+1)*self.batch_size]
         for index in range(self.batch_size):
             #复制填充
-            data= self.pad_sequence(datas[index],self.sentence_length)
-            label = self.pad_sequence(labels[index],self.sentence_length)
+            data= self.pad_sequence(datas[index],self.src_sentence_length)    #源语
+            label = self.pad_sequence(labels[index],self.dst_sentence_length) #目标语
             output_x.append(data)
             output_label.append(label)
-            efficient_sequence_length.append(min(100,len(labels[index])))
-        return output_x,output_label,efficient_sequence_length
-        #返回的都是下标,注意efficient_sequence_length是有效的长度
+            src_sequence_length.append(min(self.src_sentence_length,len(datas[index])))
+            #dst_sequence_length.append(min(self.dst_sentence_length,len(labels[index])))
+            dst_sequence_length.append(min(self.dst_sentence_length,len(label)))
+        return output_x,output_label,src_sequence_length,dst_sequence_length
+        #返回的都是下标,注意src(dst)_sequence_length是有效的长度
 
     def test_data(self):
         output_x=[]
         output_label=[]
-        efficient_sequence_length=[]
-        datas = self.src_test_raw[0:]
-        labels = self.dst_test_raw[0:]
+        src_sequence_length=[]
+        dst_sequence_length=[]
+        datas = self.src_test_raw[0:self.batch_size]
+        labels = self.dst_test_raw[0:self.batch_size]
         for index in range(len(datas)):
             #复制填充
-            data= self.pad_sequence(datas[index],self.sentence_length)
-            label = self.pad_sequence(labels[index],self.sentence_length)
+            data= self.pad_sequence(datas[index],self.src_sentence_length)
+            label = self.pad_sequence(labels[index],self.dst_sentence_length)
             output_x.append(data)
             output_label.append(label)
-            efficient_sequence_length.append(min(100,len(labels[index])))
-        return output_x,output_label,efficient_sequence_length
+            src_sequence_length.append(min(self.src_sentence_length,len(datas[index])))
+            dst_sequence_length.append(min(self.dst_sentence_length,len(labels[index])))
+        return output_x,output_label,src_sequence_length,dst_sequence_length
 
 
 def evaluate(predict_labels,real_labels,efficient_length):
