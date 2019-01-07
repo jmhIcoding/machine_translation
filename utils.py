@@ -106,6 +106,9 @@ class  DATAPROCESS:
         self.train_batches= [i for i in range(int(len(self.src_train_raw)/self.batch_size) -1)]
         self.train_batch_index = 0
 
+        self.test_batches= [i for i in range(int(len(self.src_test_raw)/self.batch_size) -1)]
+        self.test_batch_index = 0
+
     def pad_sequence(self,sequence,object_length,pad_value=None):
         '''
         :param sequence: 待填充的序列
@@ -134,16 +137,33 @@ class  DATAPROCESS:
         labels = self.dst_train_raw[index*self.batch_size:(index+1)*self.batch_size]
         for index in range(self.batch_size):
             #复制填充
-            data= self.pad_sequence(datas[index],self.src_sentence_length)    #源语
-            label = self.pad_sequence(labels[index],self.dst_sentence_length) #目标语
-            label[-1]=self.dst_word2id['<END>']                              #确保,目标语句子的尾部一定是一个END
+            data= self.pad_sequence(datas[index],self.src_sentence_length,pad_value=int(self.src_word2id['<END>']))    #源语
+            label = self.pad_sequence(labels[index],self.dst_sentence_length,pad_value=int(self.dst_word2id['<END>'])) #目标语
+            label[-1]=int(self.dst_word2id['<END>'])                              #确保,目标语句子的尾部一定是一个END
             output_x.append(data)
             output_label.append(label)
             src_sequence_length.append(min(self.src_sentence_length,len(datas[index])))
             dst_sequence_length.append(min(self.dst_sentence_length,len(label)))
         return output_x,output_label,src_sequence_length,dst_sequence_length
         #返回的都是下标,注意src(dst)_sequence_length是有效的长度
-
+    def next_test_batch(self):
+        output_x=[]
+        output_label=[]
+        src_sequence_length=[]
+        dst_sequence_length=[]
+        index =self.test_batches[self.test_batch_index]
+        self.test_batch_index =(self.test_batch_index +1 ) % len(self.test_batches)
+        datas = self.src_test_raw[index*self.batch_size:(index+1)*self.batch_size]
+        labels = self.dst_test_raw[index*self.batch_size:(index+1)*self.batch_size]
+        for index in range(len(datas)):
+            #复制填充
+            data= self.pad_sequence(datas[index],self.src_sentence_length)
+            label = self.pad_sequence(labels[index],self.dst_sentence_length)
+            output_x.append(data)
+            output_label.append(label)
+            src_sequence_length.append(min(self.src_sentence_length,len(datas[index])))
+            dst_sequence_length.append(min(self.dst_sentence_length,len(labels[index])))
+        return output_x,output_label,src_sequence_length,dst_sequence_length
     def test_data(self):
         output_x=[]
         output_label=[]
