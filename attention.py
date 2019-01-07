@@ -102,7 +102,7 @@ class AttentionModel:
         self.Va=tf.get_variable(name='score-Va',shape=[self.word_embedding_len,1],initializer=tf.contrib.layers.xavier_initializer())
     def build_graph(self):
         #encoder部分,可以使用现有的lstm结构
-        with tf.name_scope("encoder"):
+        with tf.variable_scope("encoder"):
             self.src_data=tf.nn.embedding_lookup(self.src_embedding_matrix,ids=self.src_sentences)
             self.fw_lstm_encoder=tf.nn.rnn_cell.LSTMCell(num_units=self.lstm_hidden_nums,activation=tf.nn.relu)
             self.bw_lstm_encoder=tf.nn.rnn_cell.LSTMCell(num_units=self.lstm_hidden_nums,activation=tf.nn.relu)
@@ -125,30 +125,32 @@ class AttentionModel:
             self.encoder_hiddens=tf.reshape(self.contact,shape=[shape_before_[0],shape_before_[1],self.lstm_hidden_nums],name='encoder-hidden-states')
 
             self.encdoer_final_state = state[0].h+state[1].c
-
         with tf.name_scope("decoder") :
-            #if self.train_flag == AttentionModel.TRAIN  :
-            #    self.dst_data = tf.nn.embedding_lookup(ids=self.dst_sentences,params=self.dst_embedding_matrix)
-            #    self.helper = TrainingHelper(inputs=self.dst_data,sequence_length=self.dst_real_sentence_lengths)
             self.dst_data = tf.nn.embedding_lookup(ids=self.dst_sentences,params=self.dst_embedding_matrix)
             self.train_helper = TrainingHelper(inputs=self.dst_data,sequence_length=self.dst_real_sentence_lengths)
-            #elif self.train_flag ==AttentionModel.PREDICT   :
-            #    #预测
-            #    self.helper = GreedyEmbeddingHelper(self.dst_embedding_matrix,self.start_tokens,self.end_token)
             self.infe_helper = GreedyEmbeddingHelper(self.dst_embedding_matrix,self.start_tokens,self.end_token)
+
             self.attention_mechanism = BahdanauAttention(num_units=self.lstm_hidden_nums,memory=self.encoder_hiddens,memory_sequence_length=self.src_real_sentence_lengths)
             self.decoder_cell = tf.nn.rnn_cell.LSTMCell(num_units=self.lstm_hidden_nums)
             self.attn_cell = AttentionWrapper(self.decoder_cell,self.attention_mechanism,attention_layer_size=self.lstm_hidden_nums)
-
-            #注意,需要在每个隐藏层的头顶上,加上一个output-layer.它的作用是：隐藏层的状态向量是hidden_nums x 1.现在需要添加一层的MLP,把它映射到字典大小
-            #
             self.decoder_output_layer = tf.layers.Dense(units=self.dst_vocb_size,activation=tf.nn.softmax,use_bias=False)
+
             with tf.variable_scope("decoder"):
                 print("Train Section")
                 self.train_decoder = BasicDecoder(self.attn_cell,self.train_helper,initial_state=self.attn_cell.zero_state(dtype=tf.float32,batch_size=self.batch_size),output_layer=self.decoder_output_layer)
                 final_outputs,final_states,final_sequence_length = dynamic_decode(self.train_decoder,maximum_iterations=self.dst_sequence_max_length)
                 self.decoder_train_logit = final_outputs.rnn_output
                 self.decoder_train_id = final_outputs.sample_id
+
+            with tf.variable_scope('decoder',reuse=True):
+                print("ATTENTIONMODEL PREDICT Section")
+                self.inference_decoder=BasicDecoder(self.attn_cell,self.infe_helper,initial_state=self.attn_cell.zero_state(dtype=tf.float32,batch_size=self.batch_size),output_layer=self.decoder_output_layer)
+                inf_outputs,_,_=dynamic_decode(self.inference_decoder,maximum_iterations=self.dst_sequence_max_length)
+                self.decoder_inference_logit =inf_outputs.rnn_output
+                self.decoder_inference_id = inf_outputs.sample_id
+
+            with tf.variable_scope('train-section'):
+
                 self.targets = tf.reshape(self.dst_sentences,[self.dst_sequence_max_length*self.batch_size],name='input-target-id')  #给定的监督语料
                 print(self.decoder_train_logit)
                 self.decoder_logit_flat=tf.reshape(self.decoder_train_logit,shape=[-1,self.dst_vocb_size],name='decoder-logit-flat')
@@ -160,14 +162,8 @@ class AttentionModel:
                 self.params = tf.trainable_variables()
                 self.gradients = tf.gradients(self.seq_loss,self.params)
                 #print("vars for loss function: ", self.vars)
-                self.clipped_gradients, _ = tf.clip_by_global_norm(self.gradients,1)  # clip gradients
+                self.clipped_gradients, _ = tf.clip_by_value(self.gradients,-1,1)  # clip gradients
                 self.train_op = self.optimizer.apply_gradients(zip(self.clipped_gradients,self.params))
-            with tf.variable_scope('decoder',reuse=True):
-                print("ATTENTIONMODEL PREDICT Section")
-                self.inference_decoder=BasicDecoder(self.attn_cell,self.infe_helper,initial_state=self.attn_cell.zero_state(dtype=tf.float32,batch_size=self.batch_size),output_layer=self.decoder_output_layer)
-                inf_outputs,_,_=dynamic_decode(self.inference_decoder,maximum_iterations=self.dst_sequence_max_length)
-                self.decoder_inference_logit =inf_outputs.rnn_output
-                self.decoder_inference_id = inf_outputs.sample_id
 
     def save(self):
         #保存模型参数

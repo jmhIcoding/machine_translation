@@ -3,10 +3,10 @@ from attention import  AttentionModel
 from attention import  logger
 from utils import  DATAPROCESS
 from utils import  evaluate
-hidden_nums=500
+hidden_nums=128
 learning_rate = 0.001
 MODE = AttentionModel.TRAIN
-max_epoch = 30
+max_epoch = 10
 dataGen = DATAPROCESS(
                         source_ling_path="data/cn.txt",
                           dest_ling_path="data/en.txt",
@@ -14,7 +14,7 @@ dataGen = DATAPROCESS(
                           source_vocb_path="data/cn.txt.vab",
                           dest_word_embeddings_path="data/en.txt.ebd.npy",
                           dest_vocb_path="data/en.txt.vab",
-                          batch_size=100,
+                          batch_size=120,
                           seperate_rate=0.1
                         )
 

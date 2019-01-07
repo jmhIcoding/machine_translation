@@ -17,7 +17,7 @@ class  DATAPROCESS:
 
         self.seperate_rate =seperate_rate       #测试集 训练集 划分比率
         self.batch_size = batch_size
-        self.src_sentence_length = 20           #截断或填充的句子长度,全部统一
+        self.src_sentence_length = 23           #截断或填充的句子长度,全部统一
         self.dst_sentence_length = 30
         #data structure to build
         self.src_data_raw=[]    #全部数据集
@@ -45,6 +45,7 @@ class  DATAPROCESS:
         self.last_batch=0
         self.epoch =0
         self.dst_vocb_size = len(self.dst_word2id)
+
     def __load_wordebedding(self):
         self.src_word_embeddings=np.load(self.src_word_embedding_path)
         self.embedding_length = np.shape(self.src_word_embeddings)[-1]
@@ -70,7 +71,8 @@ class  DATAPROCESS:
             train_label_rawlines=fp.readlines()
         total_lines = len(train_data_rawlines)
         assert len(train_data_rawlines)==len(train_label_rawlines)
-
+        src_len=[]
+        dst_len=[]
         for index in range(total_lines):
             data_line = train_data_rawlines[index].split(" ")[:-1]
             label_line = train_label_rawlines[index].split(" ")[:-1]
@@ -80,7 +82,8 @@ class  DATAPROCESS:
             #add and seperate valid ,train set.
             data=[int(self.src_word2id.get(each,0)) for each in data_line]
             label=[int(self.dst_word2id.get(each,0)) for each in label_line]
-
+            src_len.append(len(data))
+            dst_len.append(len(label))
             self.src_data_raw.append(data)
             self.dst_data_raw.append(label)
 
@@ -90,6 +93,15 @@ class  DATAPROCESS:
             else:
                 self.src_train_raw.append(data)
                 self.dst_train_raw.append(label)
+        self.src_len_std=np.std(src_len)
+        self.src_len_mean=np.mean(src_len)
+        self.src_len_max=np.max(src_len)
+        self.src_len_min=np.min(src_len)
+
+        self.dst_len_std=np.std(dst_len)
+        self.dst_len_mean=np.mean(dst_len)
+        self.dst_len_max = np.max(dst_len)
+        self.dst_len_min=np.min(dst_len)
 
         self.train_batches= [i for i in range(int(len(self.src_train_raw)/self.batch_size) -1)]
         self.train_batch_index = 0
@@ -124,10 +136,10 @@ class  DATAPROCESS:
             #复制填充
             data= self.pad_sequence(datas[index],self.src_sentence_length)    #源语
             label = self.pad_sequence(labels[index],self.dst_sentence_length) #目标语
+            label[-1]=self.dst_word2id['<END>']                              #确保,目标语句子的尾部一定是一个END
             output_x.append(data)
             output_label.append(label)
             src_sequence_length.append(min(self.src_sentence_length,len(datas[index])))
-            #dst_sequence_length.append(min(self.dst_sentence_length,len(labels[index])))
             dst_sequence_length.append(min(self.dst_sentence_length,len(label)))
         return output_x,output_label,src_sequence_length,dst_sequence_length
         #返回的都是下标,注意src(dst)_sequence_length是有效的长度
@@ -192,8 +204,14 @@ if __name__ == '__main__':
                           batch_size=5,
                           seperate_rate=0.1
                         )
-    src,dst,length=dataGen.next_train_batch()
-    print(src)
-    print(dst)
-    print(length)
+    print("-"*10+"src corpus"+'-'*20)
+    print({'std':dataGen.src_len_std,'mean':dataGen.src_len_mean,'max':dataGen.src_len_max,'min':dataGen.src_len_min})
 
+    print('-'*10+"dst corpus"+'-'*20)
+    print({'std':dataGen.dst_len_std,'mean':dataGen.dst_len_mean,'max':dataGen.dst_len_max,'min':dataGen.dst_len_min})
+    '''
+        ----------src corpus--------------------
+        {'std': 1.1084102394696949, 'mean': 21.437810945273633, 'max': 23, 'min': 20}
+        ----------dst corpus--------------------
+        {'std': 1.1049706194897553, 'mean': 28.491805677494877, 'max': 30, 'min': 27}
+    '''
