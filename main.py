@@ -5,7 +5,7 @@ from utils import  DATAPROCESS
 from utils import  evaluate
 hidden_nums=128
 learning_rate = 0.001
-MODE = AttentionModel.TRAIN
+MODE = AttentionModel.PREDICT
 max_epoch = 10
 dataGen = DATAPROCESS(
                         source_ling_path="data/cn.txt",
