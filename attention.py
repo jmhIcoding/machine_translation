@@ -160,7 +160,7 @@ class AttentionModel:
                 self.optimizer = tf.train.AdamOptimizer(learning_rate=self.lr)
                 #self.train_op = self.optimizer.minimize(self.seq_loss)
                 self.params = tf.trainable_variables()
-                self.gradients = tf.gradients(self.seq_loss,self.params)
+                self.gradients = self.optimizer.compute_gradients(self.seq_loss,self.params)
                 #print("vars for loss function: ", self.vars)
                 self.clipped_gradients= [(tf.clip_by_va(self.grad,-5,5),var) for grad,var in self.gradients if self.gradients if not None ] # clip gradients
                 self.train_op = self.optimizer.apply_gradients(self.clipped_gradients)
