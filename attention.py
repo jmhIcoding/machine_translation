@@ -106,11 +106,7 @@ class AttentionModel:
             self.src_data=tf.nn.embedding_lookup(self.src_embedding_matrix,ids=self.src_sentences)
             self.fw_lstm_encoder=tf.nn.rnn_cell.LSTMCell(num_units=self.lstm_hidden_nums,activation=tf.nn.relu)
             self.bw_lstm_encoder=tf.nn.rnn_cell.LSTMCell(num_units=self.lstm_hidden_nums,activation=tf.nn.relu)
-
             outputs,state=tf.nn.bidirectional_dynamic_rnn(self.fw_lstm_encoder,self.bw_lstm_encoder,inputs=self.src_data,sequence_length=self.src_real_sentence_lengths,dtype=tf.float32)
-            #自带的bidirectional_dynamic_rnn只输出最后一个隐藏层的状态,虽然他的output是没有问题的
-
-            #print(output)
             self.fw_output=outputs[0]#batch_size,src_max_sequence,hidden_nums
             self.bw_output=outputs[1]#batch_size,src_max_sequence,hidden_nums
             #print(state)
@@ -124,7 +120,7 @@ class AttentionModel:
             #print(self.contact)
             self.encoder_hiddens=tf.reshape(self.contact,shape=[shape_before_[0],shape_before_[1],self.lstm_hidden_nums],name='encoder-hidden-states')
 
-            self.encdoer_final_state = state[0].h+state[1].c
+            self.encdoer_final_state = state[0].h+state[1].h
         with tf.name_scope("decoder") :
             self.dst_data = tf.nn.embedding_lookup(ids=self.dst_sentences,params=self.dst_embedding_matrix)
             self.train_helper = TrainingHelper(inputs=self.dst_data,sequence_length=self.dst_real_sentence_lengths)
@@ -158,11 +154,8 @@ class AttentionModel:
                 self.mask = tf.to_float(tf.sequence_mask(self.dst_real_sentence_lengths,maxlen=self.dst_sequence_max_length),'mask')
                 self.seq_loss = sequence_loss(self.decoder_train_logit,self.dst_sentences,weights=self.mask)
                 self.optimizer = tf.train.AdamOptimizer(learning_rate=self.lr)
-                #self.train_op = self.optimizer.minimize(self.seq_loss)
-                self.params = tf.trainable_variables()
-                self.gradients = self.optimizer.compute_gradients(self.seq_loss,self.params)
-                #print("vars for loss function: ", self.vars)
-                self.clipped_gradients= [(tf.clip_by_va(self.grad,-5,5),var) for grad,var in self.gradients if self.gradients if not None ] # clip gradients
+                self.gradients = self.optimizer.compute_gradients(self.seq_loss,var_list=tf.trainable_variables())
+                self.clipped_gradients= [(tf.clip_by_value(grad,-5,5),var) for grad,var in self.gradients if grad is not None ] # clip gradients
                 self.train_op = self.optimizer.apply_gradients(self.clipped_gradients)
 
     def save(self):

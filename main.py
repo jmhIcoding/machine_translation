@@ -27,7 +27,7 @@ Model = AttentionModel(src_word_embeddings=dataGen.src_word_embeddings,dst_word_
                        learning_rate=learning_rate,
                        start_token=int(dataGen.dst_word2id['<START>']),
                        end_token=int(dataGen.dst_word2id['<END>']),
-                       model_path=".\\bilstm-models.cpk"
+                       model_path="bilstm-models.cpk"
                        )
 
 
