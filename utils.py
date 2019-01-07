@@ -164,12 +164,12 @@ class  DATAPROCESS:
         rst=[]
         for id in ids:
             rst.append(self.src_id2word[str(id)])
-        return  "_".join(rst)
+        return  " ".join(rst)
     def tgt_id2words(self,ids):
         rst=[]
         for id in ids:
             rst.append(self.dst_id2word[str(id)])
-        return  "_".join(rst)
+        return  " ".join(rst)
 def evaluate(predict_labels,real_labels,efficient_length):
 #输入的单位是batch;
 # predict_labels:[batch_size,sequence_length],real_labels:[batch_size,sequence_length]
