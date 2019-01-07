@@ -162,8 +162,8 @@ class AttentionModel:
                 self.params = tf.trainable_variables()
                 self.gradients = tf.gradients(self.seq_loss,self.params)
                 #print("vars for loss function: ", self.vars)
-                self.clipped_gradients, _ = tf.clip_by_value(self.gradients,-1,1)  # clip gradients
-                self.train_op = self.optimizer.apply_gradients(zip(self.clipped_gradients,self.params))
+                self.clipped_gradients= [(tf.clip_by_va(self.grad,-5,5),var) for grad,var in self.gradients if self.gradients if not None ] # clip gradients
+                self.train_op = self.optimizer.apply_gradients(self.clipped_gradients)
 
     def save(self):
         #保存模型参数
