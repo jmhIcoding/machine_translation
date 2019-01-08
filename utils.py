@@ -157,8 +157,8 @@ class  DATAPROCESS:
         labels = self.dst_test_raw[index*self.batch_size:(index+1)*self.batch_size]
         for index in range(len(datas)):
             #复制填充
-            data= self.pad_sequence(datas[index],self.src_sentence_length)
-            label = self.pad_sequence(labels[index],self.dst_sentence_length)
+            data= self.pad_sequence(datas[index],self.src_sentence_length,pad_value=int(self.src_word2id['<END>']))
+            label = self.pad_sequence(labels[index],self.dst_sentence_length,pad_value=int(self.dst_word2id['<END>']))
             output_x.append(data)
             output_label.append(label)
             src_sequence_length.append(min(self.src_sentence_length,len(datas[index])))
@@ -169,16 +169,25 @@ class  DATAPROCESS:
         output_label=[]
         src_sequence_length=[]
         dst_sequence_length=[]
-        datas = self.src_test_raw[0:self.batch_size]
-        labels = self.dst_test_raw[0:self.batch_size]
+        datas = self.src_test_raw[0:]
+        labels = self.dst_test_raw[0:]
         for index in range(len(datas)):
             #复制填充
-            data= self.pad_sequence(datas[index],self.src_sentence_length)
-            label = self.pad_sequence(labels[index],self.dst_sentence_length)
+            data= self.pad_sequence(datas[index],self.src_sentence_length,pad_value=int(self.src_word2id['<END>']))
+            label = self.pad_sequence(labels[index],self.dst_sentence_length,pad_value=int(self.dst_word2id['<END>']))
             output_x.append(data)
             output_label.append(label)
             src_sequence_length.append(min(self.src_sentence_length,len(datas[index])))
             dst_sequence_length.append(min(self.dst_sentence_length,len(labels[index])))
+        start=0
+        end=len(datas)
+        while len(output_x)< self.batch_size:
+            #不满一个batch就填充
+            output_x.append(output_x[start])
+            output_label.append(output_label[start])
+            src_sequence_length.append(src_sequence_length[start])
+            dst_sequence_length.append(dst_sequence_length[start])
+            start=(start+1) % end
         return output_x,output_label,src_sequence_length,dst_sequence_length
     def src_id2words(self,ids):
         rst=[]
