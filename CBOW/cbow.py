@@ -30,7 +30,7 @@ train_op = tf.train.AdamOptimizer(learning_rate).minimize(loss)
 
 with tf.Session() as sess:
     sess.run(tf.initialize_all_variables())
-    max_epoch =10000
+    max_epoch =100
     for epoch in range(1,max_epoch):
         _x,_y = data.next_batch()
         #生成本次的输入
