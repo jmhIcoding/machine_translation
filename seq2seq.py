@@ -2,24 +2,26 @@
 __author__ = 'jmh081701'
 from utils import  DATAPROCESS
 import  tensorflow as tf
-from utils import  evaluate
+batch_size = 300
+rnn_size = 200
+rnn_num_layers = 1
 
+encoder_embedding_size = 100
+decoder_embedding_size = 100
+# Learning Rate
+lr = 0.001
+display_step = 10
 dataGen = DATAPROCESS(source_ling_path="data/cn.txt",
                           dest_ling_path="data/en.txt",
                           source_word_embedings_path="data/cn.txt.ebd.npy",
                           source_vocb_path="data/cn.txt.vab",
                           dest_word_embeddings_path="data/en.txt.ebd.npy",
                           dest_vocb_path="data/en.txt.vab",
-                          batch_size=300,
+                          batch_size=batch_size,
                           seperate_rate=0.1
                         )
 
 def model_inputs():
-    """
-    构造输入
-
-    返回：inputs, targets, learning_rate, source_sequence_len, target_sequence_len, max_target_sequence_len，类型为tensor
-    """
     inputs = tf.placeholder(tf.int32, [None, None], name="inputs")
     targets = tf.placeholder(tf.int32, [None, None], name="targets")
     learning_rate = tf.placeholder(tf.float32, name="learning_rate")
@@ -92,8 +94,12 @@ def decoder_layer_train(encoder_states, decoder_cell, decoder_embed,
     training_helper = tf.contrib.seq2seq.TrainingHelper(inputs=decoder_embed,
                                                        sequence_length=target_sequence_len,
                                                        time_major=False)
+    #添加注意力机制
+    #先定义一个Bahda 注意力机制。它是用一个小的神经网络来做打分的,num_units指明这个小的神经网络的大小
     attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(num_units=rnn_size,memory=encoder_outputs,memory_sequence_length=source_sequence_len)
+    #在原来rnn的基础上配上一层AttentionWrapper
     decoder_cell = tf.contrib.seq2seq.AttentionWrapper(decoder_cell,attention_mechanism,attention_layer_size=rnn_size)
+    #初始状态设置为encoder最后的输出状态
     training_decoder = tf.contrib.seq2seq.BasicDecoder(decoder_cell,
                                                       training_helper,
                                                       decoder_cell.zero_state(batch_size,dtype=tf.float32).clone(cell_state=encoder_states),
@@ -117,7 +123,7 @@ def decoder_layer_infer(encoder_states, decoder_cell, decoder_embed, start_id, e
     @param decoder_embed: Decoder端词向量嵌入后的输入
     @param start_id: 句子起始单词的token id， 即"<START>"的编码
     @param end_id: 句子结束的token id，即"<END>"的编码
-    @param max_target_sequence_len: 法语文本的最大长度
+    @param max_target_sequence_len: 英语文本的最大长度
     @param output_layer: 输出层
     @batch_size: batch size
     """
@@ -128,7 +134,7 @@ def decoder_layer_infer(encoder_states, decoder_cell, decoder_embed, start_id, e
                                                                 start_tokens,
                                                                 end_id)
     attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(num_units=rnn_size,memory=encoder_outputs,memory_sequence_length=source_sequence_len)
-        #加入attention
+        #加入attention ，加入的方式与train类似
     decoder_cell = tf.contrib.seq2seq.AttentionWrapper(decoder_cell,attention_mechanism,attention_layer_size=rnn_size)
     inference_decoder = tf.contrib.seq2seq.BasicDecoder(decoder_cell,
                                                        inference_helper,
@@ -203,19 +209,7 @@ def seq2seq_model(input_data, target_data, batch_size,
                                                                       decoder_embeding_size,
                                                                        batch_size,encoder_outputs,source_sequence_len)
     return training_decoder_outputs, inference_decoder_outputs
-# Batch Size
-batch_size = 300
-# RNN Size
-rnn_size = 200
-# Number of Layers
-rnn_num_layers = 1
-# Embedding Size
-encoder_embedding_size = 100
-decoder_embedding_size = 100
-# Learning Rate
-lr = 0.001
-# 每30轮打一次结果
-display_step = 10
+
 
 train_graph = tf.Graph()
 
@@ -282,8 +276,8 @@ with tf.Session(graph=train_graph) as sess:
                 print('Epoch {:>3} - Valid Loss: {:>6.4f}'
                       .format(dataGen.epoch, loss))
                 if dataGen.epoch % 30 ==0 :
+                    #每 30个epoch 保存一次
                     saver.save(sess,"checkpoints/dev")
     # Save Model
-
     saver.save(sess, "checkpoints/dev")
     print('Model Trained and Saved')
