@@ -251,7 +251,7 @@ with train_graph.as_default():
         clipped_gradients = [(tf.clip_by_value(grad, -1., 1.), var) for grad, var in gradients if grad is not None]
         train_op = optimizer.apply_gradients(clipped_gradients)
 
-max_epoch = 300
+max_epoch = 500
 with tf.Session(graph=train_graph) as sess:
     sess.run(tf.global_variables_initializer())
     try:
