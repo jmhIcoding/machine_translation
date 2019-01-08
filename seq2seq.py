@@ -38,8 +38,8 @@ def encoder_layer(rnn_inputs, rnn_size, rnn_num_layers,
     @param rnn_inputs: rnn的输入
     @param rnn_size: rnn的隐层结点数
     @param rnn_num_layers: rnn的堆叠层数
-    @param source_sequence_len: 英文句子序列的长度
-    @param source_vocab_size: 英文词典的大小
+    @param source_sequence_len: 中文句子序列的长度
+    @param source_vocab_size: 中文词典的大小
     @param encoder_embedding_size: Encoder层中对单词进行词向量嵌入后的维度
     """
     # 对输入的单词进行词向量嵌入
@@ -61,8 +61,8 @@ def decoder_layer_inputs(target_data, target_vocab_to_int, batch_size):
     """
     对Decoder端的输入进行处理
 
-    @param target_data: 法语数据的tensor
-    @param target_vocab_to_int: 法语数据的词典到索引的映射
+    @param target_data: 目标语数据的tensor
+    @param target_vocab_to_int: 目标语数据的词典到索引的映射: dict
     @param batch_size: batch size
     """
     # 去掉batch中每个序列句子的最后一个单词
@@ -83,8 +83,8 @@ def decoder_layer_train(encoder_states, decoder_cell, decoder_embed,
     @param encoder_states: Encoder端编码得到的Context Vector
     @param decoder_cell: Decoder端
     @param decoder_embed: Decoder端词向量嵌入后的输入
-    @param target_sequence_len: 法语文本的长度
-    @param max_target_sequence_len: 法语文本的最大长度
+    @param target_sequence_len: 英语文本的长度
+    @param max_target_sequence_len: 英语文本的最大长度
     @param output_layer: 输出层
     """
 
@@ -115,8 +115,8 @@ def decoder_layer_infer(encoder_states, decoder_cell, decoder_embed, start_id, e
     @param encoder_states: Encoder端编码得到的Context Vector
     @param decoder_cell: Decoder端
     @param decoder_embed: Decoder端词向量嵌入后的输入
-    @param start_id: 句子起始单词的token id， 即"<GO>"的编码
-    @param end_id: 句子结束的token id，即"<EOS>"的编码
+    @param start_id: 句子起始单词的token id， 即"<START>"的编码
+    @param end_id: 句子结束的token id，即"<END>"的编码
     @param max_target_sequence_len: 法语文本的最大长度
     @param output_layer: 输出层
     @batch_size: batch size
@@ -128,6 +128,7 @@ def decoder_layer_infer(encoder_states, decoder_cell, decoder_embed, start_id, e
                                                                 start_tokens,
                                                                 end_id)
     attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(num_units=rnn_size,memory=encoder_outputs,memory_sequence_length=source_sequence_len)
+        #加入attention
     decoder_cell = tf.contrib.seq2seq.AttentionWrapper(decoder_cell,attention_mechanism,attention_layer_size=rnn_size)
     inference_decoder = tf.contrib.seq2seq.BasicDecoder(decoder_cell,
                                                        inference_helper,
@@ -144,20 +145,6 @@ def decoder_layer_infer(encoder_states, decoder_cell, decoder_embed, start_id, e
 def decoder_layer(encoder_states, decoder_inputs, target_sequence_len,
                    max_target_sequence_len, rnn_size, rnn_num_layers,
                    target_vocab_to_int, target_vocab_size, decoder_embedding_size, batch_size,encoder_outputs,source_sequence_length):
-    """
-    构造Decoder端
-
-    @param encoder_states: Encoder端编码得到的Context Vector
-    @param decoder_inputs: Decoder端的输入
-    @param target_sequence_len: 法语文本的长度
-    @param max_target_sequence_len: 法语文本的最大长度
-    @param rnn_size: rnn隐层结点数
-    @param rnn_num_layers: rnn堆叠层数
-    @param target_vocab_to_int: 法语单词到token id的映射
-    @param target_vocab_size: 法语词典的大小
-    @param decoder_embedding_size: Decoder端词向量嵌入的大小
-    @param batch_size: batch size
-    """
 
     decoder_embeddings = tf.Variable(tf.random_uniform([target_vocab_size, decoder_embedding_size]))
     decoder_embed = tf.nn.embedding_lookup(decoder_embeddings, decoder_inputs)
@@ -200,24 +187,6 @@ def seq2seq_model(input_data, target_data, batch_size,
                  source_vocab_size, target_vocab_size,
                  encoder_embedding_size, decoder_embeding_size,
                  rnn_size, rnn_num_layers, target_vocab_to_int):
-
-    """
-    构造Seq2Seq模型
-
-    @param input_data: tensor of input data
-    @param target_data: tensor of target data
-    @param batch_size: batch size
-    @param source_sequence_len: 英文语料的长度
-    @param target_sequence_len: 法语语料的长度
-    @param max_target_sentence_len: 法语的最大句子长度
-    @param source_vocab_size: 英文词典的大小
-    @param target_vocab_size: 法语词典的大小
-    @param encoder_embedding_size: Encoder端词嵌入向量大小
-    @param decoder_embedding_size: Decoder端词嵌入向量大小
-    @param rnn_size: rnn隐层结点数
-    @param rnn_num_layers: rnn堆叠层数
-    @param target_vocab_to_int: 法语单词到token id的映射
-    """
     encoder_outputs, encoder_states = encoder_layer(input_data, rnn_size, rnn_num_layers, source_sequence_len,
                                       source_vocab_size, encoder_embedding_size)
 
@@ -282,11 +251,15 @@ with train_graph.as_default():
         clipped_gradients = [(tf.clip_by_value(grad, -1., 1.), var) for grad, var in gradients if grad is not None]
         train_op = optimizer.apply_gradients(clipped_gradients)
 
-max_epoch = 100
+max_epoch = 300
 with tf.Session(graph=train_graph) as sess:
     sess.run(tf.global_variables_initializer())
-    loader = tf.train.Saver()
-    loader.restore(sess, tf.train.latest_checkpoint('./checkpoints'))
+    try:
+        loader = tf.train.Saver()
+        loader.restore(sess, tf.train.latest_checkpoint('./checkpoints'))
+    except Exception as exp:
+        print("retrain model")
+    saver = tf.train.Saver()
     dataGen.epoch =1
     while dataGen.epoch < max_epoch:
             output_x,output_label,src_sequence_length,dst_sequence_length=dataGen.next_train_batch()
@@ -297,11 +270,8 @@ with tf.Session(graph=train_graph) as sess:
                  learning_rate: lr,
                  source_sequence_len: src_sequence_length,
                  target_sequence_len: dst_sequence_length})
-
-
             if dataGen.train_batch_index % display_step == 0 and dataGen.train_batch_index > 0:
-
-
+                output_x,output_label,src_sequence_length,dst_sequence_length=dataGen.next_test_batch()
                 batch_train_logits = sess.run(
                     inference_logits,
                     {inputs: output_x,
@@ -309,10 +279,11 @@ with tf.Session(graph=train_graph) as sess:
                      target_sequence_len: dst_sequence_length}
                     )
 
-                print('Epoch {:>3} Batch {:>4}- Loss: {:>6.4f}'
-                      .format(dataGen.epoch, dataGen.train_batch_index, loss))
-
+                print('Epoch {:>3} - Valid Loss: {:>6.4f}'
+                      .format(dataGen.epoch, loss))
+                if dataGen.epoch % 30 ==0 :
+                    saver.save(sess,"checkpoints/dev")
     # Save Model
-    saver = tf.train.Saver()
+
     saver.save(sess, "checkpoints/dev")
     print('Model Trained and Saved')

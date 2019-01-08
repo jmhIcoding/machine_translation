@@ -25,7 +25,7 @@ with tf.Session(graph=loaded_graph) as sess:
     target_sequence_length = loaded_graph.get_tensor_by_name('target_sequence_len:0')
     source_sequence_length = loaded_graph.get_tensor_by_name('source_sequence_len:0')
     print("inference begin ")
-    output_x,output_label,src_sequence_length,dst_sequence_length=dataGen.next_train_batch()
+    output_x,output_label,src_sequence_length,dst_sequence_length=dataGen.next_test_batch()
     print("inference")
 
     translate_logits=sess.run(fetches=logits,feed_dict={input_data:output_x,target_sequence_length:dst_sequence_length,source_sequence_length:src_sequence_length})
