@@ -6,6 +6,8 @@ batch_size = 300
 rnn_size = 200
 rnn_num_layers = 1
 
+max_epoch = 350
+
 encoder_embedding_size = 100
 decoder_embedding_size = 100
 # Learning Rate
@@ -245,7 +247,6 @@ with train_graph.as_default():
         clipped_gradients = [(tf.clip_by_value(grad, -1., 1.), var) for grad, var in gradients if grad is not None]
         train_op = optimizer.apply_gradients(clipped_gradients)
 
-max_epoch = 500
 with tf.Session(graph=train_graph) as sess:
     sess.run(tf.global_variables_initializer())
     try:
