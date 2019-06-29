@@ -2,7 +2,7 @@
 __author__ = 'jmh081701'
 from utils import  DATAPROCESS
 import  tensorflow as tf
-batch_size = 300
+batch_size = 100
 rnn_size = 200
 rnn_num_layers = 1
 
@@ -218,7 +218,7 @@ train_graph = tf.Graph()
 with train_graph.as_default():
     inputs, targets, learning_rate, source_sequence_len, target_sequence_len, _ = model_inputs()
 
-    max_target_sequence_len = 30
+    max_target_sequence_len = dataGen.dst_sentence_length
     train_logits, inference_logits = seq2seq_model(tf.reverse(inputs, [-1]),
                                                   targets,
                                                   batch_size,

@@ -5,7 +5,13 @@ import  numpy as np
 import  random
 
 class  DATAPROCESS:
-    def __init__(self,source_ling_path,dest_ling_path,source_word_embedings_path,source_vocb_path,dest_word_embeddings_path,dest_vocb_path,seperate_rate=0.05,batch_size=100):
+    def __init__(self,source_ling_path,dest_ling_path,source_word_embedings_path,
+                 source_vocb_path,
+                 dest_word_embeddings_path,
+                 dest_vocb_path,
+                 seperate_rate=0.05,
+                 batch_size=100,
+                 percitile=0.9):
         self.src_data_path =source_ling_path #源语
         self.dst_data_path =dest_ling_path  #目标语对应翻译结果
 
@@ -17,8 +23,6 @@ class  DATAPROCESS:
 
         self.seperate_rate =seperate_rate       #测试集 训练集 划分比率
         self.batch_size = batch_size
-        self.src_sentence_length = 23           #截断或填充的句子长度,全部统一
-        self.dst_sentence_length = 30
         #data structure to build
         self.src_data_raw=[]    #全部数据集
         self.dst_data_raw =[]
@@ -39,13 +43,51 @@ class  DATAPROCESS:
 
         self.__load_wordebedding()
 
+        self.src_cdf=[]                         #源语 句子长度的累计分布 src_cdf[t]=0.6,表示 P({x<=t}) = 60%
+        self.dst_cdf=[]                         #目标语 句子长度的累计分布 dst_cdf[t]=0.6,表示 P({x<=t}) = 60%
 
         self.__load_data()
+
+        for i in range(len(self.src_cdf)):
+            if self.src_cdf[i] > percitile :
+                self.src_sentence_length = i    #按照分布90%分位数，截断或填充的句子长度,全部统一,这个概率由percentile
+                break
+        for i in range(len(self.dst_cdf)):
+            if self.dst_cdf[i] > percitile:
+                self.dst_sentence_length = i    #按照分布90%分位数，截断或填充的句子长度,全部统一
+                break
+        self.dst_sentence_length = 61
 
         self.last_batch=0
         self.epoch =0
         self.dst_vocb_size = len(self.dst_word2id)
 
+    def cdf(self,length_list,percentile):
+        length_dist ={}
+        sum =0
+        max_len = 0
+
+        for each in length_list:
+            if each not in length_dist:
+                length_dist.setdefault(each,0)
+            length_dist[each] +=1
+            sum +=1
+            if max_len <each:
+                max_len =each
+        for each in length_dist:
+            length_dist[each] = length_dist[each] *1.0/sum
+        sum =0
+        percentiles = [0] * max_len
+        for i in range(int(max_len)):
+            if i in length_dist:
+                sum += length_dist[i]
+                percentiles[i] = sum
+                if percentile!=None:
+                    #返回值
+                    if percentiles[i] > percentile:
+                        return i
+        #返回CDF分布
+        return  percentiles
     def __load_wordebedding(self):
         self.src_word_embeddings=np.load(self.src_word_embedding_path)
         self.embedding_length = np.shape(self.src_word_embeddings)[-1]
@@ -65,9 +107,9 @@ class  DATAPROCESS:
 
     def __load_data(self):
 
-        with open(self.src_data_path,encoding='utf8') as fp:
+        with open(self.src_data_path) as fp:
             train_data_rawlines=fp.readlines()
-        with open(self.dst_data_path,encoding='utf8') as fp:
+        with open(self.dst_data_path) as fp:
             train_label_rawlines=fp.readlines()
         total_lines = len(train_data_rawlines)
         assert len(train_data_rawlines)==len(train_label_rawlines)
@@ -97,11 +139,13 @@ class  DATAPROCESS:
         self.src_len_mean=np.mean(src_len)
         self.src_len_max=np.max(src_len)
         self.src_len_min=np.min(src_len)
+        self.src_cdf = self.cdf(src_len,None)
 
         self.dst_len_std=np.std(dst_len)
         self.dst_len_mean=np.mean(dst_len)
         self.dst_len_max = np.max(dst_len)
         self.dst_len_min=np.min(dst_len)
+        self.dst_cdf = self.cdf(dst_len,None)
 
         self.train_batches= [i for i in range(int(len(self.src_train_raw)/self.batch_size) -1)]
         self.train_batch_index = 0
@@ -121,7 +165,7 @@ class  DATAPROCESS:
             sequence = sequence[:object_length]
         else:
             sequence = sequence+[pad_value]*(object_length- len(sequence))
-        return sequence
+        return sequence[:object_length]
 
     def next_train_batch(self):
         #padding
@@ -238,6 +282,17 @@ if __name__ == '__main__':
 
     print('-'*10+"dst corpus"+'-'*20)
     print({'std':dataGen.dst_len_std,'mean':dataGen.dst_len_mean,'max':dataGen.dst_len_max,'min':dataGen.dst_len_min})
+    print("#"*30)
+    print("source corpus cdf")
+    src_cdf=dataGen.src_cdf
+    for i in range(len(src_cdf)):
+        print(i,src_cdf[i])
+
+    print("#"*30)
+    print("destination corpus cdf")
+    dst_cdf=dataGen.dst_cdf
+    for i in range(len(dst_cdf)):
+        print(i,dst_cdf[i])
     '''
         ----------src corpus--------------------
         {'std': 1.1084102394696949, 'mean': 21.437810945273633, 'max': 23, 'min': 20}
