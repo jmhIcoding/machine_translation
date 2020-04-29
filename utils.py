@@ -4,24 +4,20 @@ import  copy
 import  numpy as np
 import  random
 
+from src.df.src.utility import LoadDataWalkieTalkieCW
+from src.df.src.utility import Cluster_consecutive_bursts
+
 class  DATAPROCESS:
-    def __init__(self,source_ling_path,dest_ling_path,source_word_embedings_path,
-                 source_vocb_path,
-                 dest_word_embeddings_path,
-                 dest_vocb_path,
+    def __init__(self,
                  seperate_rate=0.05,
                  batch_size=100,
-                 percitile=0.9):
-        self.src_data_path =source_ling_path #源语
-        self.dst_data_path =dest_ling_path  #目标语对应翻译结果
+                 observe_length=10,
+                 vocb_size=9520,
+                 is_test=False
+    ):
 
-        self.src_word_embedding_path = source_word_embedings_path #中文预训练的词向量
-        self.src_vocb_path  = source_vocb_path   #预训练好的中文词典
-
-        self.dst_word_embedding_path=dest_word_embeddings_path #预训练好的 英文单词词向量
-        self.dst_vocb_path = dest_vocb_path    #预训练好的英文词典
-
-        self.seperate_rate =seperate_rate       #测试集 训练集 划分比率
+        self.obv_length = observe_length
+        self.seperate_rate =seperate_rate       #验证集占比
         self.batch_size = batch_size
         #data structure to build
         self.src_data_raw=[]    #全部数据集
@@ -41,91 +37,88 @@ class  DATAPROCESS:
         self.dst_word2id=None
         self.dst_embedding_length =0
 
-        self.__load_wordebedding()
-
         self.src_cdf=[]                         #源语 句子长度的累计分布 src_cdf[t]=0.6,表示 P({x<=t}) = 60%
         self.dst_cdf=[]                         #目标语 句子长度的累计分布 dst_cdf[t]=0.6,表示 P({x<=t}) = 60%
 
-        self.__load_data()
-
-        for i in range(len(self.src_cdf)):
-            if self.src_cdf[i] > percitile :
-                self.src_sentence_length = i    #按照分布90%分位数，截断或填充的句子长度,全部统一,这个概率由percentile
-                break
-        for i in range(len(self.dst_cdf)):
-            if self.dst_cdf[i] > percitile:
-                self.dst_sentence_length = i    #按照分布90%分位数，截断或填充的句子长度,全部统一
-                break
-        self.dst_sentence_length = 61
+        self.src_sentence_length = 40           #encode 输入序列的长度
+        self.dst_sentence_length = 40           #decode 输出结果序列的长度
 
         self.last_batch=0
         self.epoch =0
-        self.dst_vocb_size = len(self.dst_word2id)
+        self.vocb_size = vocb_size              #每个burst_size 属于有正也有负
 
-    def cdf(self,length_list,percentile):
-        length_dist ={}
-        sum =0
-        max_len = 0
+        self.start_size_id   = vocb_size -1     #起始标识
+        self.end_size_id     = 0                #结束标注
+        self.end_token_id    = self.size_to_tokenid(self.end_size_id)
+        self.start_token_id = self.size_to_tokenid(self.start_size_id)
 
-        for each in length_list:
-            if each not in length_dist:
-                length_dist.setdefault(each,0)
-            length_dist[each] +=1
-            sum +=1
-            if max_len <each:
-                max_len =each
-        for each in length_dist:
-            length_dist[each] = length_dist[each] *1.0/sum
-        sum =0
-        percentiles = [0] * max_len
-        for i in range(int(max_len)):
-            if i in length_dist:
-                sum += length_dist[i]
-                percentiles[i] = sum
-                if percentile!=None:
-                    #返回值
-                    if percentiles[i] > percentile:
-                        return i
-        #返回CDF分布
-        return  percentiles
+        self.__load_wordebedding()
+        self.__load_data(is_test=is_test)
+
+    def size_to_tokenid(self,burst_size):
+        #把负方向的busrt size 映射到4758维以上
+        if burst_size < 0:
+            return self.vocb_size//2 - burst_size
+        else:
+            return burst_size
+    def tokenid_to_size(self,tokenid):
+        if tokenid >self.vocb_size//2:
+            return  self.vocb_size//2 - tokenid
+        else:
+            return tokenid
     def __load_wordebedding(self):
-        self.src_word_embeddings=np.load(self.src_word_embedding_path)
-        self.embedding_length = np.shape(self.src_word_embeddings)[-1]
-        with open(self.src_vocb_path,encoding="utf8") as fp:
-            self.src_id2word = json.load(fp)
-        self.src_word2id={}
-        for each in self.src_id2word:
-            self.src_word2id.setdefault(self.src_id2word[each],each)
+        print('There is no need to load pretrained  embedding wordvector')
+        pass
+    def cdf(self,length_list,percentile):
+        return  np.percentile(length_list,percentile)
+    def _real_length(self,x):
+        ##x.shape:(1,2300,1)
+        x   = np.array(x)
+        l= 0
+        r = x.shape[0]
+        while l < r:
+            mid = (l+r)//2
+            if abs(x[mid])> 0:
+                l =mid+1
+            else:
+                r = mid
+        return l
+    def __load_data(self,is_test = False):
 
-        self.dst_word_embeddings=np.load(self.dst_word_embedding_path)
-        self.embedding_length = np.shape(self.dst_word_embeddings)[-1]
-        with open(self.dst_vocb_path,encoding="utf8") as fp:
-            self.dst_id2word = json.load(fp)
-        self.dst_word2id={}
-        for each in self.dst_id2word:
-            self.dst_word2id.setdefault(self.dst_id2word[each],each)
+        X_train, y_train, X_valid, y_valid, X_test, y_test=LoadDataWalkieTalkieCW(is_cluster=False)
+        if not is_test:
+            X=np.concatenate([X_train,X_valid])
+        else:
+            X=X_test
 
-    def __load_data(self):
+        raw_text = Cluster_consecutive_bursts(X,normalized=False,padding=True,return_array=False)
+        #每一行就是一个句子,而且是填充好的.
 
-        with open(self.src_data_path) as fp:
-            train_data_rawlines=fp.readlines()
-        with open(self.dst_data_path) as fp:
-            train_label_rawlines=fp.readlines()
+        train_data_rawlines = copy.deepcopy(raw_text)
+        train_label_rawlines = copy.deepcopy(raw_text)
+        del raw_text
+
         total_lines = len(train_data_rawlines)
         assert len(train_data_rawlines)==len(train_label_rawlines)
         src_len=[]
         dst_len=[]
         for index in range(total_lines):
-            data_line = train_data_rawlines[index].split(" ")[:-1]
-            label_line = train_label_rawlines[index].split(" ")[:-1]
-            label_line =["<START>"]+label_line+["<END>"]    #在目标语中的每个句子的一头一尾添加开始翻译和结束翻译的标记
-                                                            #这个是必不可少的！
-                                                            #源语料句子并没有这个要求，可加可不加
             #add and seperate valid ,train set.
-            data=[int(self.src_word2id.get(each,0)) for each in data_line]
-            label=[int(self.dst_word2id.get(each,0)) for each in label_line]
-            src_len.append(len(data))
-            dst_len.append(len(label))
+            data= [self.start_size_id] + train_label_rawlines[index]
+            data =data[:self.src_sentence_length]           #把起始的start_burst_size_id加上,然后截断为固定的长度
+
+            if self._real_length(data) <= self.obv_length:
+                #过滤掉小于观察长度的数据
+                continue
+            data=[self.size_to_tokenid(x) for x  in data]   #把burst_size_id转换为token的表示方法,
+            #print('full data:',data)
+            label  = copy.deepcopy(data[self.obv_length:])                     #这是输入到decoder的
+            #print('label:',label)
+            src_len.append(self._real_length(data))
+            dst_len.append(self._real_length(label))
+            #
+            data=data[:self.obv_length] #+[self.end_token_id]*(self.src_sentence_length-self.obv_length)      #截断!只保留[0,obv_length),obv_length之后的内容全部为0，这是输入为encoder的
+            #print('obv:',data)
             self.src_data_raw.append(data)
             self.dst_data_raw.append(label)
 
@@ -135,17 +128,18 @@ class  DATAPROCESS:
             else:
                 self.src_train_raw.append(data)
                 self.dst_train_raw.append(label)
+
         self.src_len_std=np.std(src_len)
         self.src_len_mean=np.mean(src_len)
         self.src_len_max=np.max(src_len)
         self.src_len_min=np.min(src_len)
-        self.src_cdf = self.cdf(src_len,None)
+        self.src_cdf = self.cdf(src_len,[i for i in range(1,100,1)])
 
         self.dst_len_std=np.std(dst_len)
         self.dst_len_mean=np.mean(dst_len)
         self.dst_len_max = np.max(dst_len)
         self.dst_len_min=np.min(dst_len)
-        self.dst_cdf = self.cdf(dst_len,None)
+        self.dst_cdf = self.cdf(dst_len,[i for i in range(1,100,1)])
 
         self.train_batches= [i for i in range(int(len(self.src_train_raw)/self.batch_size) -1)]
         self.train_batch_index = 0
@@ -179,15 +173,18 @@ class  DATAPROCESS:
             self.epoch +=1
         datas = self.src_train_raw[index*self.batch_size:(index+1)*self.batch_size]
         labels = self.dst_train_raw[index*self.batch_size:(index+1)*self.batch_size]
+
         for index in range(self.batch_size):
             #复制填充
-            data= self.pad_sequence(datas[index],self.src_sentence_length,pad_value=int(self.src_word2id['<END>']))    #源语
-            label = self.pad_sequence(labels[index],self.dst_sentence_length,pad_value=int(self.dst_word2id['<END>'])) #目标语
-            label[-1]=int(self.dst_word2id['<END>'])                              #确保,目标语句子的尾部一定是一个END
+            data= self.pad_sequence(datas[index],self.src_sentence_length,pad_value=0)    #源语
+            #label = labels[index]
+            label = self.pad_sequence(labels[index],self.dst_sentence_length,pad_value=0) #目标语
+            label[-1] = 0
             output_x.append(data)
             output_label.append(label)
-            src_sequence_length.append(min(self.src_sentence_length,len(datas[index])))
-            dst_sequence_length.append(min(self.dst_sentence_length,len(label)))
+
+            src_sequence_length.append(self._real_length(datas[index]))         #真实长度
+            dst_sequence_length.append(len(labels[index]))    #真实长度，注意要把end-token-加入到里面去
         return output_x,output_label,src_sequence_length,dst_sequence_length
         #返回的都是下标,注意src(dst)_sequence_length是有效的长度
     def next_test_batch(self):
@@ -199,14 +196,17 @@ class  DATAPROCESS:
         self.test_batch_index =(self.test_batch_index +1 ) % len(self.test_batches)
         datas = self.src_test_raw[index*self.batch_size:(index+1)*self.batch_size]
         labels = self.dst_test_raw[index*self.batch_size:(index+1)*self.batch_size]
+
         for index in range(len(datas)):
             #复制填充
-            data= self.pad_sequence(datas[index],self.src_sentence_length,pad_value=int(self.src_word2id['<END>']))
-            label = self.pad_sequence(labels[index],self.dst_sentence_length,pad_value=int(self.dst_word2id['<END>']))
+            data= self.pad_sequence(datas[index],self.src_sentence_length,pad_value=0)
+            label = self.pad_sequence(labels[index],self.dst_sentence_length,pad_value=0)
+            label[-1] =0
+
             output_x.append(data)
             output_label.append(label)
-            src_sequence_length.append(min(self.src_sentence_length,len(datas[index])))
-            dst_sequence_length.append(min(self.dst_sentence_length,len(labels[index])))
+            src_sequence_length.append(self._real_length(datas[index]))
+            dst_sequence_length.append(len(self._real_length(labels[index])))
         return output_x,output_label,src_sequence_length,dst_sequence_length
     def test_data(self):
         output_x=[]
@@ -217,12 +217,13 @@ class  DATAPROCESS:
         labels = self.dst_test_raw[0:]
         for index in range(len(datas)):
             #复制填充
-            data= self.pad_sequence(datas[index],self.src_sentence_length,pad_value=int(self.src_word2id['<END>']))
-            label = self.pad_sequence(labels[index],self.dst_sentence_length,pad_value=int(self.dst_word2id['<END>']))
+            data= self.pad_sequence(datas[index],self.src_sentence_length,pad_value=0)
+            label = self.pad_sequence(labels[index],self.dst_sentence_length,pad_value=0)
+            label[-1] =0
             output_x.append(data)
             output_label.append(label)
-            src_sequence_length.append(min(self.src_sentence_length,len(datas[index])))
-            dst_sequence_length.append(min(self.dst_sentence_length,len(labels[index])))
+            src_sequence_length.append(self._real_length(datas[index]))
+            dst_sequence_length.append(self._real_length(labels[index]))
         start=0
         end=len(datas)
         while len(output_x)< self.batch_size:
@@ -233,16 +234,7 @@ class  DATAPROCESS:
             dst_sequence_length.append(dst_sequence_length[start])
             start=(start+1) % end
         return output_x,output_label,src_sequence_length,dst_sequence_length
-    def src_id2words(self,ids):
-        rst=[]
-        for id in ids:
-            rst.append(self.src_id2word[str(id)])
-        return  " ".join(rst)
-    def tgt_id2words(self,ids):
-        rst=[]
-        for id in ids:
-            rst.append(self.dst_id2word[str(id)])
-        return  " ".join(rst)
+
 def evaluate(predict_labels,real_labels,efficient_length):
 #输入的单位是batch;
 # predict_labels:[batch_size,sequence_length],real_labels:[batch_size,sequence_length]
@@ -268,13 +260,9 @@ def evaluate(predict_labels,real_labels,efficient_length):
     return {'precision':precision,'recall':recall,'F1':F1}
 
 if __name__ == '__main__':
-    dataGen = DATAPROCESS(source_ling_path="data/cn.txt",
-                          dest_ling_path="data/en.txt",
-                          source_word_embedings_path="data/cn.txt.ebd.npy",
-                          source_vocb_path="data/cn.txt.vab",
-                          dest_word_embeddings_path="data/en.txt.ebd.npy",
-                          dest_vocb_path="data/en.txt.vab",
-                          batch_size=5,
+    batch_size = 5
+    dataGen = DATAPROCESS(
+                          batch_size=batch_size,
                           seperate_rate=0.1
                         )
     print("-"*10+"src corpus"+'-'*20)
@@ -283,19 +271,27 @@ if __name__ == '__main__':
     print('-'*10+"dst corpus"+'-'*20)
     print({'std':dataGen.dst_len_std,'mean':dataGen.dst_len_mean,'max':dataGen.dst_len_max,'min':dataGen.dst_len_min})
     print("#"*30)
-    print("source corpus cdf")
+    print("source corpus percentile")
     src_cdf=dataGen.src_cdf
     for i in range(len(src_cdf)):
         print(i,src_cdf[i])
 
     print("#"*30)
-    print("destination corpus cdf")
+    print("destination corpus percentile ")
     dst_cdf=dataGen.dst_cdf
     for i in range(len(dst_cdf)):
         print(i,dst_cdf[i])
     '''
-        ----------src corpus--------------------
-        {'std': 1.1084102394696949, 'mean': 21.437810945273633, 'max': 23, 'min': 20}
-        ----------dst corpus--------------------
-        {'std': 1.1049706194897553, 'mean': 28.491805677494877, 'max': 30, 'min': 27}
+            ----------src corpus--------------------
+            {'std': 0.0, 'min': 50, 'mean': 50.0, 'max': 50}
+            ----------dst corpus--------------------
+            {'std': 272.76550908345234, 'min': 51, 'mean': 346.51727982162765, 'max': 2231}
     '''
+    output_x,output_label,src_sequence_length,dst_sequence_length = dataGen.next_train_batch()
+    print(src_sequence_length)
+    print(dst_sequence_length)
+    for i in range(batch_size):
+        for j in range(len(output_x[i])):
+            print("{2},real:{0},label:{1}".format(output_x[i][j],output_label[i][j],j))
+        print("########################################")
+
